@@ -1,104 +1,56 @@
-# -*- coding: utf-8 -*-
-"""
-cnpj_search.py
-----------------
-Consulta de dados cadastrais de empresas brasileiras via BrasilAPI
-(https://brasilapi.com.br/api/cnpj/v1/{cnpj}), que espelha a base
-pública da Receita Federal. Dado público — qualquer CNPJ ativo tem
-razão social, situação cadastral, endereço e CNAE consultáveis
-livremente, inclusive pelo site oficial da própria Receita.
-"""
-import re
-
 import requests
+from rich.console import Console
 from rich.table import Table
-
 from .. import config, utils
+from .report_generator import export_to_html
 
+console = Console()
 
-def _clean_cnpj(cnpj: str) -> str:
-    return re.sub(r"\D", "", cnpj)
-
-
-def _valid_cnpj_format(cnpj: str) -> bool:
-    return len(cnpj) == 14 and cnpj != cnpj[0] * 14 and _cnpj_digits_ok(cnpj)
-
-
-def run(cnpj: str):
-    clean = _clean_cnpj(cnpj)
-    if not _valid_cnpj_format(clean):
-        utils.error("CNPJ inválido: confira os 14 dígitos (formato ou dígito verificador incorreto).")
-        utils.pause()
-        return
-
-    utils.info(f"Consultando CNPJ {clean} na BrasilAPI (base da Receita Federal)...")
-    url = f"https://brasilapi.com.br/api/cnpj/v1/{clean}"
-
+def run(cnpj):
     try:
-        resp = requests.get(url, headers=config.HEADERS, timeout=config.REQUEST_TIMEOUT)
-    except requests.RequestException as exc:
-        utils.error(f"Falha ao consultar a API: {exc}")
-        utils.pause()
-        return
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+        console.print(f"\n[*] Consultando CNPJ [green]{cnpj_limpo}[/green] na BrasilAPI...")
+        
+        resp = requests.get(f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}", timeout=15)
+        
+        if resp.status_code != 200:
+            utils.warn(f"CNPJ não encontrado ou erro na API (Status {resp.status_code}). Verifique se digitou corretamente.")
+        else:
+            data = resp.json()
+            
+            table = Table(title=f"Empresa - CNPJ {cnpj_limpo}")
+            table.add_column("Campo", style="bold cyan")
+            table.add_column("Valor")
+            
+            # Lógica nova para montar o endereço sem sobrar vírgulas
+            partes_endereco = []
+            if data.get("logradouro"): partes_endereco.append(data.get("logradouro"))
+            if data.get("numero"): partes_endereco.append(data.get("numero"))
+            if data.get("bairro"): partes_endereco.append(data.get("bairro"))
+            endereco_final = ", ".join(partes_endereco) if partes_endereco else "N/A"
 
-    if resp.status_code == 404:
-        utils.warn("CNPJ não encontrado na base da Receita Federal.")
-        utils.pause()
-        return
-    if resp.status_code != 200:
-        utils.error(f"A API retornou status {resp.status_code}.")
-        utils.pause()
-        return
+            campos = {
+                "Razão social": data.get("razao_social", "N/A"),
+                "Situação cadastral": data.get("descricao_situacao_cadastral", "N/A"),
+                "Data de abertura": data.get("data_inicio_atividade", "N/A"),
+                "Atividade principal (CNAE)": data.get("cnae_fiscal_descricao", "N/A"),
+                "Endereço": endereco_final,
+                "CEP": data.get("cep", "N/A"),
+                "Capital social": str(data.get("capital_social", "N/A"))
+            }
+            
+            for k, v in campos.items():
+                table.add_row(k, str(v))
+                
+            console.print(table)
+            
+            escolha = input("\nDeseja exportar o resultado em HTML? (s/n): ").strip().lower()
+            if escolha == 's':
+                filename = f"cnpj_{cnpj_limpo}"
+                path = export_to_html(f"Empresa - CNPJ {cnpj_limpo}", campos, filename)
+                console.print(f"[green]✅ Relatório salvo com sucesso em:[/green] [bold]{path}[/bold]")
+                
+    except Exception as e:
+        utils.warn(f"Erro ao consultar o CNPJ: {e}")
 
-    data = resp.json()
-
-    table = Table(title=f"Empresa — CNPJ {clean}")
-    table.add_column("Campo", style="bold cyan")
-    table.add_column("Valor")
-
-    campos = [
-        ("Razão social", data.get("razao_social")),
-        ("Nome fantasia", data.get("nome_fantasia")),
-        ("Situação cadastral", data.get("descricao_situacao_cadastral")),
-        ("Data de abertura", data.get("data_inicio_atividade")),
-        ("Porte", data.get("descricao_porte")),
-        ("Natureza jurídica", data.get("descricao_natureza_juridica")),
-        ("Atividade principal (CNAE)", data.get("cnae_fiscal_descricao")),
-        ("E-mail", data.get("email")),
-        ("Telefone", f"({data.get('ddd_telefone_1')})" if data.get("ddd_telefone_1") else None),
-        ("Endereço", ", ".join(filter(None, [
-            data.get("logradouro"), data.get("numero"), data.get("bairro"),
-            data.get("municipio"), data.get("uf"),
-        ])) or None),
-        ("CEP", data.get("cep")),
-        ("Capital social", data.get("capital_social")),
-    ]
-    for campo, valor in campos:
-        if valor:
-            table.add_row(campo, str(valor))
-
-    utils.console.print(table)
-
-    socios = data.get("qsa", [])
-    if socios:
-        utils.info("Quadro de sócios (QSA):")
-        for s in socios[:10]:
-            utils.console.print(f"  • {s.get('nome_socio', '—')} — {s.get('qualificacao_socio', '—')}")
-
-    if utils.console.input(
-        "\nDeseja exportar o resultado? [green](s/n)[/green]: "
-    ).strip().lower() == "s":
-        path = utils.save_json(data, f"cnpj_{clean}")
-        utils.success(f"Resultado salvo em: {path}")
-
-    utils.pause()
-
-
-def _cnpj_digits_ok(cnpj: str) -> bool:
-    def dv(base, pesos):
-        r = sum(int(d) * p for d, p in zip(base, pesos)) % 11
-        return 0 if r < 2 else 11 - r
-
-    d1 = dv(cnpj[:12], [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
-    d2 = dv(cnpj[:13], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
-    return cnpj[12:] == f"{d1}{d2}"
+    input("\nPressione ENTER para voltar ao menu...")

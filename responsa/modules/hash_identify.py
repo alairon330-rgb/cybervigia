@@ -1,73 +1,60 @@
-# -*- coding: utf-8 -*-
-"""
-hash_identify.py
-------------------
-Identifica o(s) possível(is) algoritmo(s) de um hash com base no seu
-comprimento e formato — útil em forense digital, CTFs e análise de
-vazamentos de credenciais (pra saber o que se está olhando antes de
-tentar quebrar/comparar). 100% offline, não faz nenhuma requisição de
-rede nem tenta quebrar o hash.
-"""
 import re
-
+from rich.console import Console
 from rich.table import Table
+from .. import config, utils
+from .report_generator import export_to_html
 
-from .. import utils
+console = Console()
 
-# (regex, [algoritmos possíveis])
-PATTERNS = [
-    (re.compile(r"^[a-f0-9]{32}$", re.I), ["MD5", "NTLM", "MD4"]),
-    (re.compile(r"^[a-f0-9]{40}$", re.I), ["SHA-1", "MySQL5 (SHA-1)"]),
-    (re.compile(r"^[a-f0-9]{56}$", re.I), ["SHA-224", "SHA3-224"]),
-    (re.compile(r"^[a-f0-9]{64}$", re.I), ["SHA-256", "SHA3-256"]),
-    (re.compile(r"^[a-f0-9]{96}$", re.I), ["SHA-384", "SHA3-384"]),
-    (re.compile(r"^[a-f0-9]{128}$", re.I), ["SHA-512", "SHA3-512", "Whirlpool"]),
-    (re.compile(r"^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$"), ["bcrypt"]),
-    (re.compile(r"^\$1\$[./A-Za-z0-9]{0,8}\$[./A-Za-z0-9]{22}$"), ["MD5 crypt (Unix)"]),
-    (re.compile(r"^\$5\$"), ["SHA-256 crypt (Unix)"]),
-    (re.compile(r"^\$6\$"), ["SHA-512 crypt (Unix)"]),
-    (re.compile(r"^\$argon2(id|i|d)\$"), ["Argon2"]),
-    (re.compile(r"^[A-Za-z0-9+/]{27}=$"), ["SHA-1 (Base64)"]),
-    (re.compile(r"^[A-Za-z0-9+/]{43}=$"), ["SHA-256 (Base64)"]),
-    (re.compile(r"^[A-Za-z0-9./]{13}$"), ["DES crypt (Unix, legado)"]),
-]
+def run(hash_str):
+    try:
+        hash_str = hash_str.strip()
+        console.print(f"\n[*] Analisando hash...")
+        
+        if not re.match(r'^[a-fA-F0-9]+$', hash_str):
+            utils.warn("O hash contém caracteres inválidos (apenas 0-9 e a-f são permitidos).")
+        else:
+            tipos = []
+            length = len(hash_str)
+            
+            if length == 32:
+                tipos = ["MD5", "NTLM", "MD4"]
+            elif length == 40:
+                tipos = ["SHA-1"]
+            elif length == 56:
+                tipos = ["SHA-224"]
+            elif length == 64:
+                tipos = ["SHA-256"]
+            elif length == 96:
+                tipos = ["SHA-384"]
+            elif length == 128:
+                tipos = ["SHA-512"]
+            else:
+                tipos = ["Desconhecido (tamanho não padrão)"]
+            
+            table = Table(title="Identificação de hash")
+            table.add_column("Campo", style="bold cyan")
+            table.add_column("Valor")
+            
+            campos = {
+                "Hash informado": hash_str,
+                "Comprimento": str(length),
+                "Algoritmo(s) provável(is)": ", ".join(tipos)
+            }
+            
+            for k, v in campos.items():
+                table.add_row(k, v)
+                
+            console.print(table)
+            utils.warn("Hashes de mesmo comprimento são indistinguíveis só pelo formato — o contexto resolve a ambiguidade.")
+            
+            escolha = input("\nDeseja exportar o resultado em HTML? (s/n): ").strip().lower()
+            if escolha == 's':
+                filename = f"hash_{hash_str[:8]}"
+                path = export_to_html(f"Identificação de Hash", campos, filename)
+                console.print(f"[green]✅ Relatório salvo em:[/green] [bold]{path}[/bold]")
 
-
-def run(value: str):
-    value = value.strip()
-    if not value:
-        utils.error("Digite um hash pra identificar.")
-        utils.pause()
-        return
-
-    matches = []
-    for pattern, algos in PATTERNS:
-        if pattern.match(value):
-            matches.extend(algos)
-
-    table = Table(title="Identificação de hash")
-    table.add_column("Campo", style="bold cyan")
-    table.add_column("Valor")
-    table.add_row("Hash informado", value)
-    table.add_row("Comprimento", str(len(value)))
-
-    if matches:
-        table.add_row("Algoritmo(s) provável(is)", ", ".join(dict.fromkeys(matches)))
-    else:
-        table.add_row("Algoritmo(s) provável(is)", "Não identificado — formato incomum")
-
-    utils.console.print(table)
-    utils.info(
-        "Hashes de mesmo comprimento (ex: MD5/NTLM, ou SHA-256/SHA3-256) são "
-        "indistinguíveis só pelo formato — o contexto de onde ele veio "
-        "geralmente resolve a ambiguidade."
-    )
-
-    if utils.console.input(
-        "\nDeseja exportar o resultado? [green](s/n)[/green]: "
-    ).strip().lower() == "s":
-        payload = {"hash": value, "comprimento": len(value), "algoritmos_provaveis": list(dict.fromkeys(matches))}
-        path = utils.save_json(payload, "hash_identify")
-        utils.success(f"Resultado salvo em: {path}")
-
-    utils.pause()
+    except Exception as e:
+        utils.warn(f"Erro ao analisar hash: {e}")
+    finally:
+        input("\nPressione ENTER para voltar ao menu...")

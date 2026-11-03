@@ -40,6 +40,9 @@ Ao abrir o programa, um olho de coruja em ASCII art com gradiente de cores
 é desenhado no terminal, seguido do menu de opções — dá pra customizar as
 cores e o desenho em `responsa/banner.py`.
 
+### 📄 Relatórios em HTML
+Agora todas as buscas podem ser exportadas em relatórios HTML no modo escuro, com links clicáveis, tabelas formatadas e layout responsivo para celular.
+
 ## 🚀 Instalação
 
 ### Pré-requisitos
