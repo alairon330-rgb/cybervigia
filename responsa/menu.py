@@ -1,14 +1,17 @@
-# -*- coding: utf-8 -*-
-"""menu.py — Menu interativo exibido logo abaixo do banner do olho de coruja."""
-from rich.panel import Panel
+from rich.console import Console
 from rich.table import Table
-
+from rich.panel import Panel
+from .modules import (
+    username_search, email_search, cep_search, phone_search,
+    name_search, ip_search, whois_search, subdomain_search,
+    cnpj_search, link_analysis, hash_identify, image_search,
+    cpf_validate, phone_owner_search
+)
 from . import banner, utils
-from .modules import (cep_search, cnpj_search, cpf_validate, email_search,
-                       hash_identify, image_search, ip_search, link_analysis,
-                       name_search, phone_search, subdomain_search,
-                       username_search, whois_search)
 
+console = Console()
+
+# Aqui está o dicionário com todas as funções, incluindo a nova 14!
 OPTIONS = {
     "1": ("Busca por nome de usuário", username_search, "Informe o username"),
     "2": ("Busca por e-mail", email_search, "Informe o e-mail"),
@@ -23,8 +26,8 @@ OPTIONS = {
     "11": ("Identificador de hash", hash_identify, "Informe o hash"),
     "12": ("Busca reversa de imagem / EXIF", image_search, "Informe a URL da imagem ou o caminho de um arquivo local"),
     "13": ("Validador de CPF (offline)", cpf_validate, "Informe o CPF"),
+    "14": ("Busca de Dono (Telefone)", phone_owner_search, "Informe o telefone (com DDI/DDD)"),
 }
-
 
 def show_menu() -> None:
     table = Table(show_header=False, box=None, padding=(0, 2))
@@ -33,9 +36,7 @@ def show_menu() -> None:
     for key, (label, _, _) in OPTIONS.items():
         table.add_row(f"[{key}]", label)
     table.add_row("[0]", "Sair")
-
     utils.console.print(Panel(table, title="Menu de Buscas — RESPONSA", border_style="cyan"))
-
 
 def main_loop() -> None:
     banner.print_banner()
@@ -44,7 +45,7 @@ def main_loop() -> None:
         choice = utils.console.input("\n[bold cyan]Escolha uma opção:[/bold cyan] ").strip()
 
         if choice == "0":
-            utils.console.print("\n[bold magenta]Até a próxima! 🦉[/bold magenta]\n")
+            utils.console.print("\n[bold magenta]Até a próxima! 🕵️‍♂️[/bold magenta]\n")
             break
 
         option = OPTIONS.get(choice)
@@ -63,7 +64,7 @@ def main_loop() -> None:
             module.run(value)
         except KeyboardInterrupt:
             utils.warn("\nBusca interrompida pelo usuário.")
-        except Exception as exc:  # pragma: no cover - proteção geral do menu
+        except Exception as exc:
             utils.error(f"Erro inesperado: {exc}")
 
         banner.print_banner()
