@@ -2,7 +2,7 @@
 """
 banner.py
 ---------
-Exibe o banner do RESPONSA: um "olho de coruja" em ASCII art, colorido,
+Exibe o banner da CyberVigia: um "olho de coruja" em ASCII art, colorido,
 mostrado sempre que o programa é iniciado no terminal.
 """
 from rich.console import Console
@@ -45,17 +45,13 @@ TITLE = r"""
 ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝      ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
 """
 
-# Gradiente de cores que "varre" o olho de cima a baixo, dando o efeito
-# colorido pedido (sem depender de libs extras além do rich).
 GRADIENT = [
     "bright_black", "grey37", "purple4", "medium_purple3", "slate_blue3",
     "royal_blue1", "deep_sky_blue1", "cyan1", "spring_green2", "green1",
     "yellow1", "orange1", "red1", "magenta1", "purple",
 ]
 
-
 def print_banner(subtitle: str = "OSINT Toolkit") -> None:
-    """Imprime o olho de coruja colorido + título + subtítulo."""
     console.clear()
     lines = OWL_EYE.splitlines()
     n = max(len(lines) - 1, 1)
@@ -67,18 +63,9 @@ def print_banner(subtitle: str = "OSINT Toolkit") -> None:
         console.print(Text(line, style=f"bold {color}"), justify="center")
 
     console.print(Text(TITLE, style="bold cyan"), justify="center")
-    console.print(
-        Text(f"— {subtitle} —", style="italic bright_white"), justify="center"
-    )
-    console.print(
-        Text(
-            "Uso ético e responsável apenas. Consulte a LGPD antes de usar.",
-            style="dim",
-        ),
-        justify="center",
-    )
+    console.print(Text(f"— {subtitle} —", style="italic bright_white"), justify="center")
+    console.print(Text("Uso ético e responsável apenas. Consulte a LGPD antes de usar.", style="dim"), justify="center")
     console.print()
-
 
 if __name__ == "__main__":
     print_banner()
